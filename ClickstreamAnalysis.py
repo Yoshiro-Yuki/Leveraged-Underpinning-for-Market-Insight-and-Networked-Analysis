@@ -102,8 +102,39 @@ class ClickstreamAnalysis:
         m2 = self.model_interest.predict_proba(final_input)[0][1] * 100
         m3 = self.model_conversion.predict_proba(final_input)[0][1] * 100
         return round(m1, 2), round(m2, 2), round(m3, 2)
+    
+    def get_model_score(self):
+        """Evaluates all three funnel stages and returns a summary of performance."""
+        if not hasattr(self, 'X_test'):
+            return "Error: Model must be trained before scoring."
+
+        stages = {
+            "Attraction (View)": (self.model_attraction, self.y_test['action_item_view']),
+            "Interest (Like/Cart)": (self.model_interest, self.y_test['action_interest']),
+            "Conversion (Buy/Offer)": (self.model_conversion, self.y_test['action_conversion'])
+        }
+
+        results = []
+        results.append("=== Model Performance Evaluation ===\n")
+
+        for name, (model, y_true) in stages.items():
+            # Get probability scores for AUC
+            y_probs = model.predict_proba(self.X_test)[:, 1]
+            # Get hard predictions for Classification Report
+            y_pred = model.predict(self.X_test)
+            
+            auc = roc_auc_score(y_true, y_probs)
+            report = classification_report(y_true, y_pred)
+            
+            results.append(f"Stage: {name}")
+            results.append(f"ROC-AUC Score: {auc:.4f}")
+            results.append("Classification Report:")
+            results.append(report)
+            results.append("-" * 40)
+
+        return "\n".join(results)
 
 if __name__ == "__main__":
     ca = ClickstreamAnalysis()
     ca.train_model()
-    ca.get_model_score()
+    print(ca.get_model_score())

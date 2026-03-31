@@ -9,11 +9,34 @@ class MetaModel:
         # Initialize the classes
         self.price_suggestor = PriceSuggestor()
         self.clickstream_model = ClickstreamAnalysis()
+        
+        # parameters for penalty calculation
+        self.precision_attraction = 0.2
+        self.recall_attraction = 0.53
+        self.beta_attraction = 0.5
+
+        self.precision_interest = 0.18
+        self.recall_interest = 0.53
+        self.beta_interest = 0.5
+
+        self.precision_conversion = 0.02
+        self.recall_conversion = 0.56
+        self.beta_conversion = 0.1
 
     def train_models(self):
         print("Training sub-models...")
         self.price_suggestor.train_models()
         self.clickstream_model.train_model()
+
+    def _penalty(self, prob, precision, recall, beta):
+        """Calculates a penalty based on the predicted probability and model performance."""
+        p = prob / 100.0 if prob > 1.0 else prob
+    
+        f_beta = (1 + beta**2) * (precision * recall) / ((beta**2 * precision) + recall + 1e-6)
+        
+        reliability_weight = f_beta * p
+
+        return reliability_weight
 
     def predict(self, name, brand_name, brand_id, item_condition, shipper, 
                 category_0, category_2, color_id, size_id, 
@@ -37,8 +60,22 @@ class MetaModel:
             color_id=color_id, size_id=size_id, 
             researched_price=researched_price # Added support
         )
-        
-        return price_val, clickstream_pred
+
+        attr, inter, conv = clickstream_pred
+
+        # Calculate score penalty for attraction probability
+        penalty_attraction = self._penalty(attr, self.precision_attraction, self.recall_attraction, self.beta_attraction)
+        attr = round((attr * (1 - penalty_attraction)), 2) # Adjusted attraction score
+
+        # Calculate score penalty for interest probability
+        penalty_interest = self._penalty(inter, self.precision_interest, self.recall_interest, self.beta_interest)
+        inter = round((inter * (1 - penalty_interest)), 2)  # Adjusted interest score
+
+        # Calculate score penalty for conversion probability
+        penalty_conversion = self._penalty(conv, self.precision_conversion, self.recall_conversion, self.beta_conversion)
+        conv = round((conv * (1 - penalty_conversion)), 2)  # Adjusted conversion score
+
+        return price_val, (attr, inter, conv)
 
     def save_model(self, filepath="..\\Datasets\\meta_model_v1_2.joblib"):
         # Save the entire object state
