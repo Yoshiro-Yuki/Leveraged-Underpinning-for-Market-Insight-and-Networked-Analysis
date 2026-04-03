@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import train_test_split, KFold
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import lightgbm as lgb
 
 class PriceSuggestor:
@@ -165,7 +165,9 @@ class PriceSuggestor:
         self.y_true = np.expm1(self.y_test)
         self.y_pred = np.expm1(self.meta_model.predict(self._get_meta_values(self.X_test)))
         
-        return f"Final R2: {r2_score(self.y_test, self.meta_model.predict(self._get_meta_values(self.X_test)))}"
+        print(f"Final R2: {r2_score(self.y_test, self.meta_model.predict(self._get_meta_values(self.X_test)))}")
+        print(f"Final MAE: {mean_absolute_error(self.y_true, self.y_pred)}")
+    
 
     def predict_product(self, name, brand_name, category, shipper, item_condition, color_id=2298, size_id=0):
         """Predicts the price for a single product.
@@ -202,3 +204,8 @@ class PriceSuggestor:
         prediction = self.meta_model.predict(self._get_meta_values(predict_prod))
 
         return round(np.expm1(prediction[0]), 2)
+    
+if __name__ == "__main__":
+    suggestor = PriceSuggestor()
+    suggestor.train_models()
+    print(suggestor.model_score())

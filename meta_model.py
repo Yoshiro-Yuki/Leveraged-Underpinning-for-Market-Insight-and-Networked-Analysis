@@ -1,49 +1,39 @@
 import joblib
 import os
+import numpy as np
+from pathlib import Path
 
+# Assuming these modules are in your local directory/path
 from PurchaseMotivation import PriceSuggestor
-from ClickstreamAnalysis import ClickstreamAnalysis
+from ClickstreamAnalysis_v2 import ClickstreamAnalysis
 
 class MetaModel:
     def __init__(self):
-        # Initialize the classes
+        """
+        Orchestrator for the entire pipeline.
+        Combines Pricing Intelligence with Funnel Decision Logic.
+        """
         self.price_suggestor = PriceSuggestor()
         self.clickstream_model = ClickstreamAnalysis()
-        
-        # parameters for penalty calculation
-        self.precision_attraction = 0.2
-        self.recall_attraction = 0.53
-        self.beta_attraction = 0.5
-
-        self.precision_interest = 0.18
-        self.recall_interest = 0.53
-        self.beta_interest = 0.5
-
-        self.precision_conversion = 0.02
-        self.recall_conversion = 0.56
-        self.beta_conversion = 0.1
 
     def train_models(self):
-        print("Training sub-models...")
+        """Trains both the pricing engine and the funnel classifiers."""
+        print("--- Training Meta-Model Pipeline ---")
+        print("1/2: Training Price Suggestor...")
         self.price_suggestor.train_models()
+        print("2/2: Training Clickstream Analysis...")
         self.clickstream_model.train_model()
-
-    def _penalty(self, prob, precision, recall, beta):
-        """Calculates a penalty based on the predicted probability and model performance."""
-        p = prob / 100.0 if prob > 1.0 else prob
-    
-        f_beta = (1 + beta**2) * (precision * recall) / ((beta**2 * precision) + recall + 1e-6)
-        
-        reliability_weight = f_beta * p
-
-        return reliability_weight
+        print("All sub-models trained successfully.")
 
     def predict(self, name, brand_name, brand_id, item_condition, shipper, 
                 category_0, category_2, color_id, size_id, 
                 price_override=None, researched_price=None):
-        """Orchestrates pricing and clickstream prediction with optional research support."""
+        """
+        Executes the full prediction flow.
+        Returns: (Suggested Price, Probabilities, Decisions, Priority Scores)
+        """
         
-        # 1. Determine the price
+        # 1. PRICING LAYER
         if price_override is None:
             price_val = self.price_suggestor.predict_product(
                 name=name, brand_name=brand_name, category=category_2, 
@@ -51,57 +41,89 @@ class MetaModel:
                 color_id=color_id, size_id=size_id
             )
         else:
-            price_val = float(price_override)
+            try:
+                price_val = float(price_override)
+            except (ValueError, TypeError):
+                price_val = 0.0
 
-        # 2. Feed the active price and optional research into Clickstream model
-        clickstream_pred = self.clickstream_model.get_predictions(
-            name=name, price=price_val, item_condition=item_condition, 
-            shipper=shipper, category=category_0, brand_name_id=brand_id, 
-            color_id=color_id, size_id=size_id, 
-            researched_price=researched_price # Added support
+        # 2. CLICKSTREAM LAYER (The 3-Layer Decision System)
+        # ensure get_predictions returns lists for [probs], [decisions], [priority]
+        probs, decisions, priority = self.clickstream_model.get_predictions(
+            name=name, 
+            price=price_val, 
+            item_condition=item_condition, 
+            shipper=shipper, 
+            category=category_0, 
+            brand_name_id=brand_id, 
+            color_id=color_id, 
+            size_id=size_id, 
+            researched_price=researched_price
         )
 
-        attr, inter, conv = clickstream_pred
+        return {
+            'active_price': round(price_val, 2),
+            'attraction': {'prob': probs[0], 'decision': decisions[0], 'intent': priority[0]},
+            'interest':   {'prob': probs[1], 'decision': decisions[1], 'intent': priority[1]},
+            'conversion': {'prob': probs[2], 'decision': decisions[2], 'intent': priority[2]}
+        }
 
-        # Calculate score penalty for attraction probability
-        penalty_attraction = self._penalty(attr, self.precision_attraction, self.recall_attraction, self.beta_attraction)
-        attr = round((attr * (1 - penalty_attraction)), 2) # Adjusted attraction score
-
-        # Calculate score penalty for interest probability
-        penalty_interest = self._penalty(inter, self.precision_interest, self.recall_interest, self.beta_interest)
-        inter = round((inter * (1 - penalty_interest)), 2)  # Adjusted interest score
-
-        # Calculate score penalty for conversion probability
-        penalty_conversion = self._penalty(conv, self.precision_conversion, self.recall_conversion, self.beta_conversion)
-        conv = round((conv * (1 - penalty_conversion)), 2)  # Adjusted conversion score
-
-        return price_val, (attr, inter, conv)
-
-    def save_model(self, filepath="..\\Datasets\\meta_model_v1_2.joblib"):
-        # Save the entire object state
+    def save_model(self, filepath=None):
+        """Saves the entire pipeline state using cross-platform paths."""
+        if filepath is None:
+            filepath = Path("..") / "Datasets" / "meta_model_v1_2.joblib"
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
         joblib.dump(self, filepath, compress=3)
-        print(f"✅ Model saved to {os.path.abspath(filepath)}")
+        print(f"✅ Meta-Model saved to {os.path.abspath(filepath)}")
 
     @classmethod
-    def load_model(cls, filepath="..\\Datasets\\meta_model_v1_2.joblib"):
-        if os.path.exists(filepath):
-            print(f"📦 Loading existing model from {filepath}...")
+    def load_model(cls, filepath=None):
+        """Loads a pre-trained meta-model or starts training if not found."""
+        if filepath is None:
+            filepath = Path("..") / "Datasets" / "meta_model_v1_2.joblib"
+        else:
+            filepath = Path(filepath)
+
+        if filepath.exists():
+            print(f"📦 Loading Meta-Model from {filepath}...")
             return joblib.load(filepath)
         else:
-            print("❌ No saved model found. Creating and training a new one...")
+            print("⚠️ No saved model found. Initializing new training session...")
             new_model = cls()
             new_model.train_models()
             new_model.save_model(filepath)
             return new_model
 
 if __name__ == "__main__":
-    # Use the class method to either load or train/save automatically
-    meta_model = MetaModel.load_model("..\\Datasets\\meta_model_v1_2.joblib")
+    # Initialize Path
+    MODEL_PATH = Path("..") / "Datasets" / "meta_model_v1_2.joblib"
     
-    # Test prediction
-    result = meta_model.predict(
-        name="Vintage Denim Jacket", brand_name="Levi's", item_condition=2, shipper=1, 
-        category_0="Clothing", category_2="Outerwear", color_id=2298, size_id=0
+    # Load or Train
+    meta = MetaModel.load_model(MODEL_PATH)
+    
+    # Test a prediction
+    result = meta.predict(
+        name="Vintage Denim Jacket", 
+        brand_name="Levi's", 
+        brand_id=123, 
+        item_condition=2, 
+        shipper=1, 
+        category_0="Clothing", 
+        category_2="Outerwear", 
+        color_id=2298, 
+        size_id=0,
+        researched_price=85.0 
     )
-    print(f"Suggested Price: {result[0]}")
-    print(f"Clickstream Probabilities (Attr, Int, Conv): {result[1]}")
+    
+    if result:
+        print("\n" + "="*40)
+        print(f"FINAL REPORT: {result['active_price']} $")
+        print("="*40)
+        for stage in ['attraction', 'interest', 'conversion']:
+            data = result[stage]
+            status = "🟢 ACT" if data['decision'] == 1 else "🔴 WAIT"
+            # Formatting to handle potential float/int inputs
+            prob_str = f"{data['prob']:.2f}%" if isinstance(data['prob'], (float, int)) else data['prob']
+            print(f"{stage.upper():10} | {status} | Intent: {data['intent']}/100 | Prob: {prob_str}")
