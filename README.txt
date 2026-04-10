@@ -1,4 +1,4 @@
-PRE-VAC (PRICE ESTIMATION & VALUE-ADDED CUSTOMER PATH)
+LUMINA (Leveraged Underpinning for Market Insight and Networked Analysis)
 
 An end-to-end machine learning system designed to optimize customer-to-customer (C2C) e-commerce listings. This application utilizes a stacked ensemble architecture to predict the optimal listing price and a multi-stage gradient boosting classifier to simulate buyer clickstream behavior (Attraction, Interest, Conversion).
 
@@ -27,6 +27,7 @@ Ensure you have Python 3.8+ installed. The following libraries are required:
 - `streamlit`
 - `plotly`
 - `scipy`
+- `imblearn`
 
 Getting Started
 
