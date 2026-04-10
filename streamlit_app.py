@@ -9,7 +9,7 @@ from scipy.stats import norm
 from meta_model import MetaModel
 
 # --- 1. System Configuration & Theme ---
-st.set_page_config(page_title="Mercari Intelligence", layout="wide")
+st.set_page_config(page_title="LUMINA", layout="wide")
 
 st.markdown("""
     <style>
@@ -36,6 +36,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 @st.cache_resource(show_spinner=False)
 def load_system_model():
     return MetaModel.load_model()
@@ -57,8 +66,9 @@ def load_simple_list(filepath):
 
 def main():
     override_price = False
-    st.markdown("<h1 style='text-align: center; color: #00FFC8; margin-bottom: 5px;'>Price Estimation & Value-Added Customer Path (PREVAC)</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align: center; color: #FFFFFF; margin-bottom: 30px;'>Prototype Model-I</h3>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center; color: #00FFC8; margin: 1px; padding: 2px; font-size: 90px;'>LUMINA</h1>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #00FFC8; margin: 5px; padding: 2px;font-size: 30px;'>Leveraged Underpinning for Market Insights and Networked Analysis</h2>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: #FFFFFF; margin: 30px; padding: 2px; font-size: 20px;'>TML-Forecaster (v1)</h3>", unsafe_allow_html=True)
 
     # Load JSON lookups
     brand_mapping = load_dropdown_data("..\\Datasets\\brand_data.json", "brand_id", "brand_name")
@@ -105,11 +115,9 @@ def main():
         st.session_state.dashboard_active = True
 
     if st.session_state.dashboard_active:
-        # --- THE SPINNER ---
         with st.spinner("ANALYZING MARKET DATA & SIMULATING SCENARIOS..."):
             mm = load_system_model()
             
-            # Fetch full prediction dict
             pred_result = mm.predict(
                 name=name, 
                 brand_name=brand_name, 
@@ -126,23 +134,22 @@ def main():
             
             price = pred_result['active_price']
             
-            # Unpack probabilities, decisions, and priority intent scores
             att, att_dec, att_pri = pred_result['attraction']['prob'], pred_result['attraction']['decision'], pred_result['attraction']['intent']
             inter, inter_dec, inter_pri = pred_result['interest']['prob'], pred_result['interest']['decision'], pred_result['interest']['intent']
             conv, conv_dec, conv_pri = pred_result['conversion']['prob'], pred_result['conversion']['decision'], pred_result['conversion']['intent']
 
-            # Generate Feedback based on Decisions Flags
-            decisions_tuple = (att_dec, inter_dec, conv_dec)
-            if decisions_tuple == (1, 1, 1):
-                feedback_msg = "🌟 Great news! Your product is well-positioned to attract views, build strong interest, and successfully convert into a sale."
-            elif decisions_tuple == (1, 1, 0):
-                feedback_msg = "👀 Your listing is likely to attract views and generate strong interest, but might struggle to cross the finish line and convert."
-            elif decisions_tuple == (1, 0, 0):
-                feedback_msg = "📢 Your product is likely to be seen, but current metrics suggest a lower chance of building interest and securing a customer."
-            elif decisions_tuple == (0, 0, 0):
-                feedback_msg = "⚠️ This listing might struggle to gain traction. Consider revising the title, category, or price to improve visibility."
+            # --- UPDATED: CONVERSION REMOVED FROM DECISION TUPLE ---
+            # Decisions are now binary ONLY for Attraction and Interest
+            decisions_tuple = (att_dec, inter_dec)
+            
+            if decisions_tuple == (1, 1):
+                feedback_msg = "🌟 Your product has strong visibility and high buyer interest. Conversion scoring will now act as your priority ranking tool."
+            elif decisions_tuple == (1, 0):
+                feedback_msg = "👀 Your listing is likely to attract views, but currently lacks elements that build consistent buyer interest."
+            elif decisions_tuple == (0, 0):
+                feedback_msg = "⚠️ This listing might struggle to gain initial traction. Consider revising title or category for better discovery."
             else:
-                feedback_msg = "🔍 While initial visibility might be low, customers who do find your product have a promising chance of engaging with it."
+                feedback_msg = "🔍 While initial discovery may be low, the listing holds potential for niche audience engagement."
             
             # Heuristics for Feature Impact
             res_no_brand = mm.predict(name=name, brand_name="Unknown", brand_id=0, item_condition=cond_val, shipper=ship_val, category_0=cat_0, category_2=cat_2, color_id=color_id, size_id=size_id)
@@ -161,12 +168,10 @@ def main():
             with col_l:
                 with st.container(border=True):
                     st.markdown("<div class='section-label'>💰 PRICE ANALYSIS</div>", unsafe_allow_html=True)
-
-                    # Change price color if override is used
                     if override_price:
                         st.markdown(f"<h1 style='color: #696969; margin:0;'>${price:,.2f} (overridden)</h1>", unsafe_allow_html=True)
                         st.markdown(f"<p style='color: #696969;'>Optimal Range: ${max(0, price-32):,.2f} to ${price+32:,.2f}</p>", unsafe_allow_html=True)
-                        price = researched_price  # Use the researched price for the distribution plot
+                        price = researched_price
                     else:
                         st.markdown(f"<h1 style='color: white; margin:0;'>${price:,.2f}</h1>", unsafe_allow_html=True)
                         st.markdown(f"<p style='color: #BC13FE;'>Optimal Range: ${max(0, price-32):,.2f} to ${price+32:,.2f}</p>", unsafe_allow_html=True)
@@ -211,6 +216,7 @@ def main():
                         with st.container(border=True):
                             st.metric("Priority Score", f"{inter_pri:.1f}/100")
                     with m3: 
+                        # Conversion remains as a Probability and Priority score display
                         st.plotly_chart(donut(conv, "CONVERSION", "#00FFC8"), use_container_width=True)
                         with st.container(border=True):
                             st.metric("Priority Score", f"{conv_pri:.1f}/100")
@@ -222,8 +228,6 @@ def main():
                 with st.container(border=True):
                     st.markdown("<div class='section-label'>🔍 FEATURE IMPACT ($)</div>", unsafe_allow_html=True)
                     fig_i = px.bar(x=[s_imp, c_imp, b_imp], y=["Free Ship", "Condition", "Brand"], orientation='h', color_discrete_sequence=['#BC13FE'])
-                    
-                    # Adjusted height to 310px to visually align with the left section
                     fig_i.update_layout(height=310, margin=dict(l=0,r=0,t=20,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
                     fig_i.update_xaxes(showgrid=False, color="white")
                     st.plotly_chart(fig_i, use_container_width=True, config={'displayModeBar': False})
@@ -233,38 +237,15 @@ def main():
                 st.markdown("<div class='section-label'>🧪 CONDITION SCENARIO SIMULATION</div>", unsafe_allow_html=True)
                 scenarios = []
                 for i, lbl in enumerate(["Excellent", "Good", "Fair", "Poor", "Very Poor"], 1):
-                    res_scenario = mm.predict(
-                        name=name, 
-                        brand_name=brand_name, 
-                        brand_id=brand_id, 
-                        item_condition=i, 
-                        shipper=ship_val, 
-                        category_0=cat_0, 
-                        category_2=cat_2, 
-                        color_id=color_id, 
-                        size_id=size_id, 
-                        price_override=researched_price, 
-                        researched_price=researched_price
-                    )
-                    
-                    s_p = res_scenario['active_price']
-                    s_a = res_scenario['attraction']['prob']
-                    s_i = res_scenario['interest']['prob']
-                    s_c = res_scenario['conversion']['prob']
-                    
-                    scenarios.append(
-                        {"Condition": f"{lbl} {'👈' if i==cond_val else ''}", "Suggested Price": f"${s_p:,.2f}", "Attraction": f"{s_a}%", "Interest": f"{s_i}%", "Conversion": f"{s_c}%"})
+                    res_scenario = mm.predict(name=name, brand_name=brand_name, brand_id=brand_id, item_condition=i, shipper=ship_val, category_0=cat_0, category_2=cat_2, color_id=color_id, size_id=size_id, price_override=researched_price, researched_price=researched_price)
+                    s_p, s_a, s_i, s_c = res_scenario['active_price'], res_scenario['attraction']['prob'], res_scenario['interest']['prob'], res_scenario['conversion']['prob']
+                    scenarios.append({"Condition": f"{lbl} {'👈' if i==cond_val else ''}", "Suggested Price": f"${s_p:,.2f}", "Attraction": f"{s_a}%", "Interest": f"{s_i}%", "Conversion": f"{s_c}%"})
                 st.table(pd.DataFrame(scenarios))
 
             with st.container(border=True):
                 st.markdown("<div class='section-label'>PRICE SENSITIVITY</div>", unsafe_allow_html=True)
                 t_prices = np.linspace(max(1, price * 0.5), price * 1.5, 15)
-                sim_c = [mm.predict(
-                    name=name, brand_name=brand_name, brand_id=brand_id, item_condition=cond_val, 
-                    shipper=ship_val, category_0=cat_0, category_2=cat_2, color_id=color_id, 
-                    size_id=size_id, price_override=p, researched_price=researched_price
-                )['conversion']['prob'] for p in t_prices]
-                
+                sim_c = [mm.predict(name=name, brand_name=brand_name, brand_id=brand_id, item_condition=cond_val, shipper=ship_val, category_0=cat_0, category_2=cat_2, color_id=color_id, size_id=size_id, price_override=p, researched_price=researched_price)['conversion']['prob'] for p in t_prices]
                 fig_d = go.Figure(go.Scatter(x=t_prices, y=sim_c, mode='lines+markers', line=dict(color='#00FFC8', width=3, shape='spline')))
                 fig_d.add_vline(x=price, line_dash="dash", line_color="#BC13FE")
                 fig_d.update_layout(height=250, paper_bgcolor='rgba(0,0,0,0)', font_color="white", margin=dict(l=0,r=0,t=20,b=0))
